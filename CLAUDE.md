@@ -1,82 +1,59 @@
-# Unic-Tunnel-App — Claude Code memory
+# Unic-Tunnel-App — repo memory
 
----
-
-## How to work in this repo (read first)
-
-**Your role here.** You are a senior product engineer on Unic-Tunnel — a self-hosted SSH-tunnel
-product (panel + desktop app) aimed at Iranian users dodging filtering. You are pragmatic,
-security-minded, allergic to over-engineering. The user is a Django developer; explain
-non-Python tech (Flutter/Dart, Wintun) when it helps. Companion repo: **Unic-Tunnel-Panel**
-(Go dashboard). Canonical design docs live there under `docs/`.
-
-**Working style:**
-- **Surgical.** Edit what's needed; don't restructure unprompted. No premature abstractions.
-- **Reuse > rewrite.** sing-box is the engine — do NOT reimplement what it already does. We
-  run it unmodified.
-- **Ask before destructive actions.** Force-push, mass file deletion, package downgrades,
-  changes to sing-box binary handling — confirm first.
-- **Security is the product.** SSH passwords live in the **OS keychain**, never plaintext,
-  never in logs. Decoded `unic://` payloads are sensitive — redact in any log output. Pin and
-  checksum the bundled `sing-box.exe`.
-- **Stay on scope.** v1 is **SSH only**, **Windows only**, **sing-box as a sidecar process**
-  (no Dart↔Go FFI). Android, Reality/VLESS, encrypted links — all "Later". Do not start them.
-
-**Token-efficient defaults:**
-- Use **`rtk <cmd>`** instead of raw `git`, `flutter`, etc. — rtk is installed globally and
-  trims output 60–90% on supported commands. See `~/.claude/RTK.md`. `rtk gain` to see
-  savings; `rtk proxy <cmd>` for raw output when needed.
-- Prefer **Grep** over Read for searching; use Read **with `offset`/`limit`** for large files.
-- **Don't re-read** a file you just edited.
-- **Batch independent tool calls in parallel** in one message.
-- Spawn the **Explore agent** when a search would take >3 queries.
-- **No code comments unless WHY is non-obvious.** No docstring novels.
-- **No new `*.md` files** without being asked.
-- **No narration of thinking.** State the action, do it, report. End-of-turn = 1–2 sentences.
-
-**When stuck.** Stop and ask. Don't guess at protocol details, file paths, or product intent.
-
----
-
-## What this is (one paragraph)
-A **Flutter Windows** app with a big On/Off button. Paste a `unic://` link → the app decodes
-it → writes a sing-box config → runs **sing-box.exe** as a background sidecar process. sing-box
-opens the SSH connection to the VPS and captures ALL device traffic + DNS via a Wintun TUN
-adapter (whole-device tunnel).
-
-## How the tunnel actually works (read before touching the engine)
-- The app is the UI/steering wheel; **sing-box is the engine**. We do NOT modify or fork it.
-- **v1 (Windows): `sing-box.exe` runs as a background sidecar** (`Process.start`) — not a
-  linked library. App writes `config.json`, starts/stops the process, reads status.
-- sing-box config = **`ssh` outbound** (user + password) + **`tun` inbound** (Wintun) → all
-  traffic routed through SSH. TUN requires **administrator elevation**.
-- Android is a later phase: embedded engine + `VpnService`. Do **not** assume sidecar there.
+> The workspace `CLAUDE.md` two levels up (via the parent of this repo) loads
+> automatically and holds the **shared rules** (role, security, scope, token
+> efficiency). This file is repo-specific.
 
 ## Stack
-- **Flutter** (Dart), desktop, **Windows v1**.
-- Bundled `sing-box.exe` (fetched at build time, checksum-verified, pinned).
-- OS keychain for secrets (`flutter_secure_storage`).
 
-## Layout (target — not scaffolded yet)
-- `lib/core/` — `unic://` decode + sing-box config generation (pure Dart, unit-testable).
-- `lib/engine/` — sidecar control: write config, start/stop sing-box, parse status.
-- `lib/ui/` — screens (paste link, On/Off, status/stats, logs).
-- `assets/singbox/` — bundled `sing-box.exe` (fetched, not committed) + `wintun.dll` if needed.
-- `test/` — unit tests for `lib/core` (decode + config-gen are easy high-value wins).
+Flutter (Dart) · **Windows v1**, Android later · runs **`sing-box.exe` as a
+background sidecar process** (no Dart↔Go FFI in v1) · OS keychain for secrets via
+`flutter_secure_storage`.
 
-## Build / run (fill in once scaffolded)
-- **Flutter SDK not installed yet** — prereq for this repo.
-- Dev: `rtk flutter run -d windows`   ·   Build: `rtk flutter build windows`
-- Running the tunnel needs **Administrator** (TUN adapter).
+## Planned layout (NOT scaffolded yet — confirm scope before generating)
 
-## The unic:// contract
-`unic://<base64url(json)>` where JSON = `{ v, name, host, port, user, password }`. Maps to a
-sing-box `ssh` outbound. Canonical: `../Unic-Tunnel-Panel/docs/unic-link-spec.md`.
+- `lib/core/` — `unic://` decode + sing-box config generation (pure Dart,
+  unit-testable, no Flutter deps)
+- `lib/engine/` — sidecar control: write `config.json`, start/stop `sing-box.exe`,
+  parse status output
+- `lib/ui/` — screens (paste link, On/Off, status, logs)
+- `assets/singbox/` — bundled `sing-box.exe` + `wintun.dll` (fetched at build time,
+  checksum-pinned, NOT committed)
+- `test/` — unit tests; start with `lib/core/`
 
-## Dangerous areas
-- TUN setup / admin elevation / Wintun — easy to break networking or leave a half-up tunnel.
-  Build a clean disconnect + **kill-switch** story before shipping.
-- Process lifecycle: never leave an orphan `sing-box.exe` after the app exits.
+Full diagram: `../docs/structure.md`.
 
-## Notes
-Keep this file lean — auto-memory accumulates Flutter/sing-box specifics as we build.
+## Build / run
+
+- **Flutter SDK is not installed yet.** Prereq before this repo can compile.
+- Dev: `rtk flutter run -d windows`
+- Build: `rtk flutter build windows`
+- Running the tunnel requires **Administrator** elevation (Wintun TUN adapter).
+
+## How the engine actually works (read before touching `lib/engine/`)
+
+The app is the UI; **sing-box is the engine**. On press-On:
+1. Decode the saved `unic://` link.
+2. Generate a sing-box `config.json`:
+   - **`ssh` outbound** with user + password from the link
+   - **`tun` inbound** (Wintun on Windows, `auto_route: true`)
+3. Spawn `sing-box.exe run -c config.json` as a child process.
+4. ALL device traffic + DNS now routes through the SSH connection.
+
+We do **not** fork or modify sing-box. Pin and checksum the bundled binary.
+
+## Gotchas specific to this repo
+
+- **Process lifecycle:** never leave an orphan `sing-box.exe` after the app exits.
+  Build a kill-switch + explicit cleanup on disconnect before any release.
+- **Decoded `unic://` payload is sensitive** — redact in log output; store the
+  password in the OS keychain, never plaintext.
+- **Admin elevation** is required for TUN. The app should detect non-elevated
+  startup and re-launch elevated (or refuse with a clear message), not silently fail.
+- **Android (later phase) is fundamentally different**: embedded engine + Android
+  `VpnService`. Do not assume the sidecar model applies there.
+
+## Scope reminder
+
+v1 = Windows + SSH only. No Android, no Reality, no encrypted link format.
+See workspace `CLAUDE.md`.

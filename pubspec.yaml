@@ -1,0 +1,12 @@
+name: unic_tunnel_app
+description: Unic-Tunnel Windows desktop client.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.0.0
+
+# Pure-Dart slice (3a) — no Flutter deps yet. UI deps (flutter, flutter_test,
+# flutter_secure_storage, etc.) come in slice 3c when we add the platform shell.
+dev_dependencies:
+  test: ^1.24.0

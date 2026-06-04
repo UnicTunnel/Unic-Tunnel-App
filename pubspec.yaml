@@ -5,8 +5,19 @@ publish_to: none
 
 environment:
   sdk: ^3.0.0
+  flutter: ">=3.0.0"
 
-# Pure-Dart slice (3a) — no Flutter deps yet. UI deps (flutter, flutter_test,
-# flutter_secure_storage, etc.) come in slice 3c when we add the platform shell.
+dependencies:
+  flutter:
+    sdk: flutter
+
 dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
   test: ^1.24.0
+
+flutter:
+  uses-material-design: true
+  # assets/singbox/sing-box.exe is bundled in slice 3c-ii (release build).
+  # During 3c-i dev, the binary path is overridden via --dart-define UNIC_SINGBOX_PATH.

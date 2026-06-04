@@ -49,8 +49,7 @@ void main() {
         'user': 'u',
         'password': 'p',
       });
-      final link = 'unic://' +
-          base64Url.encode(utf8.encode(badJson)).replaceAll('=', '');
+      final link = 'unic://${base64Url.encode(utf8.encode(badJson)).replaceAll('=', '')}';
       expect(() => parseUnicLink(link), throwsA(isA<UnicLinkException>()));
     });
 
@@ -72,7 +71,7 @@ void main() {
     );
     final link = buildUnicLink(p);
     // Manually pad and confirm we still decode.
-    final padded = link + '==';
+    final padded = '$link==';
     expect(parseUnicLink(padded), equals(p));
   });
 }

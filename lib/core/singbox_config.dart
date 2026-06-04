@@ -67,7 +67,7 @@ SingboxConfig buildSingboxConfig(
     'route': {'final': 'ssh-out'},
   };
 
-  final encoder = JsonEncoder.withIndent('  ');
+  const encoder = JsonEncoder.withIndent('  ');
   return SingboxConfig._(
     encoder.convert(config),
     tun ? -1 : socksPort,

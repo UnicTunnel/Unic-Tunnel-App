@@ -79,11 +79,11 @@ class SingboxSidecar {
     }
 
     _proc!.stdout
-        .transform(SystemEncoding().decoder)
+        .transform(const SystemEncoding().decoder)
         .transform(const LineSplitter())
         .listen((line) => _outputController.add(SidecarLine(line)));
     _proc!.stderr
-        .transform(SystemEncoding().decoder)
+        .transform(const SystemEncoding().decoder)
         .transform(const LineSplitter())
         .listen((line) => _outputController.add(SidecarLine(line, isStderr: true)));
 

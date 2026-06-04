@@ -1,0 +1,26 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata
+
+# Windows build ephemeral
+windows/flutter/ephemeral/
+
+# Bundled engine (fetched at build time, not committed)
+assets/singbox/*.exe
+assets/singbox/*.dll
+
+# Secrets / local (never commit)
+.env
+.env.*
+*.local
+secrets/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

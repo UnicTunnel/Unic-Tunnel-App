@@ -59,10 +59,35 @@ void main() {
       expect(inbound['stack'], equals('mixed'));
     });
 
-    test('still has the same ssh outbound', () {
-      final out = (obj['outbounds'] as List).single as Map;
-      expect(out['type'], equals('ssh'));
-      expect(out['server'], equals(_payload.host));
+    test('uses the modern `address` array (not the removed inet4_address)', () {
+      // sing-box ≥1.12 FATALs if it sees inet4_address. Regression guard.
+      final inbound = (obj['inbounds'] as List).single as Map;
+      expect(inbound['address'], isA<List>());
+      expect((inbound['address'] as List).single, equals('172.19.0.1/30'));
+      expect(inbound.containsKey('inet4_address'), isFalse);
+      expect(inbound.containsKey('inet6_address'), isFalse);
+    });
+
+    test('has ssh + direct outbounds (direct is needed for UDP)', () {
+      final outs = (obj['outbounds'] as List).cast<Map>();
+      expect(outs, hasLength(2));
+      expect(outs[0]['type'], equals('ssh'));
+      expect(outs[0]['server'], equals(_payload.host));
+      expect(outs[1]['type'], equals('direct'));
+      expect(outs[1]['tag'], equals('direct-out'));
+    });
+
+    test('UDP is routed direct (SSH cannot carry UDP)', () {
+      final rules = ((obj['route'] as Map)['rules'] as List).cast<Map>();
+      final udpRule = rules.firstWhere((r) => r['network'] == 'udp');
+      expect(udpRule['outbound'], equals('direct-out'));
+    });
+
+    test('DNS is forced to TCP and detoured through ssh-out', () {
+      final dns = obj['dns'] as Map;
+      final server = (dns['servers'] as List).single as Map;
+      expect(server['type'], equals('tcp'));
+      expect(server['detour'], equals('ssh-out'));
     });
   });
 

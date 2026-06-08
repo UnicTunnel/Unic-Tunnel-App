@@ -36,5 +36,11 @@ target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
 target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib")
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
+# Request UAC elevation on every launch — sing-box's Wintun-based TUN inbound
+# needs Administrator to create the virtual network adapter. Same model every
+# Windows VPN client uses. Single source of truth: do NOT also add a
+# <trustInfo> block to runner.exe.manifest or mt.exe will fail c1010001.
+target_link_options(${BINARY_NAME} PRIVATE "/MANIFESTUAC:level='requireAdministrator' uiAccess='false'")
+
 # Run the Flutter tool portions of the build. This must not be removed.
 add_dependencies(${BINARY_NAME} flutter_assemble)

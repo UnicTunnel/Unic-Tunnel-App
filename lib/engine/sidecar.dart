@@ -40,11 +40,19 @@ class SingboxSidecar {
 
   Process? _proc;
   File? _configFile;
+  IOSink? _logSink;
   SidecarState _state = SidecarState.idle;
   int? _exitCode;
   Completer<int>? _exitCompleter;
 
   SingboxSidecar({required this.binaryPath, this.workDir});
+
+  /// Where the sidecar tees sing-box stdout/stderr for post-mortem debugging.
+  /// Truncated each time [start] is called. Readable from a non-elevated shell
+  /// when the app is elevated, since both run as the same user.
+  static File debugLogFile() => File(
+        '${Directory.systemTemp.path}${Platform.pathSeparator}unic-singbox.log',
+      );
 
   Stream<SidecarLine> get output => _outputController.stream;
   Stream<SidecarState> get stateChanges => _stateController.stream;
@@ -65,6 +73,15 @@ class SingboxSidecar {
             'unic-singbox-${DateTime.now().microsecondsSinceEpoch}.json')
         .writeAsString(config.json);
 
+    // Tee everything to a file so post-mortem debugging doesn't depend on
+    // being able to drive the app (elevated apps can't be touched by UIPI).
+    _logSink = debugLogFile().openWrite(mode: FileMode.write);
+    _logSink!.writeln('=== unic-singbox debug log ${DateTime.now().toIso8601String()} ===');
+    _logSink!.writeln('binary: $binaryPath');
+    _logSink!.writeln('config: ${_configFile!.path}');
+    _logSink!.writeln('---');
+    await _logSink!.flush();
+
     _exitCompleter = Completer<int>();
     try {
       _proc = await Process.start(
@@ -73,6 +90,8 @@ class SingboxSidecar {
         runInShell: false,
       );
     } catch (e) {
+      _logSink!.writeln('!!! Process.start threw: $e');
+      await _logSink!.flush();
       _setState(SidecarState.failed);
       await _cleanup();
       rethrow;
@@ -81,11 +100,17 @@ class SingboxSidecar {
     _proc!.stdout
         .transform(const SystemEncoding().decoder)
         .transform(const LineSplitter())
-        .listen((line) => _outputController.add(SidecarLine(line)));
+        .listen((line) {
+      _outputController.add(SidecarLine(line));
+      _logSink?.writeln('[stdout] $line');
+    });
     _proc!.stderr
         .transform(const SystemEncoding().decoder)
         .transform(const LineSplitter())
-        .listen((line) => _outputController.add(SidecarLine(line, isStderr: true)));
+        .listen((line) {
+      _outputController.add(SidecarLine(line, isStderr: true));
+      _logSink?.writeln('[stderr] $line');
+    });
 
     _proc!.exitCode.then((code) async {
       _exitCode = code;
@@ -130,6 +155,15 @@ class SingboxSidecar {
     _configFile = null;
     if (f != null && await f.exists()) {
       try { await f.delete(); } catch (_) { /* best-effort */ }
+    }
+    final sink = _logSink;
+    _logSink = null;
+    if (sink != null) {
+      try {
+        sink.writeln('--- sidecar cleanup at ${DateTime.now().toIso8601String()} ---');
+        await sink.flush();
+        await sink.close();
+      } catch (_) { /* best-effort */ }
     }
   }
 

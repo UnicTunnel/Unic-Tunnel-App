@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../core/singbox_config.dart';
@@ -22,13 +24,16 @@ class _HomeScreenState extends State<HomeScreen> {
   _ConnState _state = _ConnState.idle;
   String? _error;
   SingboxSidecar? _sidecar;
+  StreamSubscription<SidecarState>? _stateSub;
+  StreamSubscription<SidecarLine>? _outputSub;
+  String? _lastEngineErr;
   final _linkController = TextEditingController();
-
-  static const _socksPort = 11080;
 
   @override
   void dispose() {
     _linkController.dispose();
+    _stateSub?.cancel();
+    _outputSub?.cancel();
     _sidecar?.close();
     super.dispose();
   }
@@ -51,9 +56,38 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _state = _ConnState.connecting;
       _error = null;
+      _lastEngineErr = null;
     });
-    final config = buildSingboxConfig(_payload!, socksPort: _socksPort);
+    // v1 defaults to TUN — every connection on the device routes through the
+    // tunnel automatically. App manifest requires Administrator for Wintun.
+    final config = buildSingboxConfig(_payload!, tun: true);
     final sidecar = SingboxSidecar(binaryPath: widget.singboxBinaryPath);
+
+    // Capture sing-box stderr while connected so we can surface it if it dies.
+    _outputSub?.cancel();
+    _outputSub = sidecar.output.listen((line) {
+      if (line.isStderr) _lastEngineErr = line.text;
+    });
+
+    // Watch for unexpected engine exit and reflect it in the UI.
+    _stateSub?.cancel();
+    _stateSub = sidecar.stateChanges.listen((s) {
+      if (!mounted) return;
+      if (s == SidecarState.failed || s == SidecarState.stopped) {
+        if (_state == _ConnState.connected ||
+            _state == _ConnState.connecting) {
+          setState(() {
+            _state = _ConnState.idle;
+            _sidecar = null;
+            _error = _lastEngineErr != null
+                ? 'Tunnel engine exited: $_lastEngineErr'
+                : 'Tunnel engine exited unexpectedly. '
+                    'See %TEMP%\\unic-singbox.log for details.';
+          });
+        }
+      }
+    });
+
     try {
       await sidecar.start(config);
       if (!mounted) return;
@@ -74,6 +108,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _disconnect() async {
     setState(() => _state = _ConnState.disconnecting);
     await _sidecar?.stop();
+    await _stateSub?.cancel();
+    _stateSub = null;
+    await _outputSub?.cancel();
+    _outputSub = null;
     if (!mounted) return;
     setState(() {
       _sidecar = null;
@@ -215,7 +253,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (connected) ...[
           const SizedBox(height: 4),
           Text(
-            'SOCKS proxy: 127.0.0.1:$_socksPort',
+            'All device traffic routed through your server',
             style: tx.bodySmall?.copyWith(color: cs.onSurfaceVariant),
           ),
         ],
